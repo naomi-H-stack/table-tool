@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treeline Table Generator</title>
+<style>
+  :root{
+    --paper:#F6F8F5;
+    --surface:#FFFFFF;
+    --ink:#1B2620;
+    --muted:#5C665F;
+    --line:#E1E7E0;
+    --line-strong:#CDD6CD;
+    --pine:#1F5C3D;
+    --pine-bright:#2E7D50;
+    --pine-tint:#E9F1EC;
+    --stone:#8A9A91;
+    --focus:#2E7D50;
+    --radius:10px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    background:var(--paper);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .topbar{
+    display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
+    padding:14px 22px;
+    background:var(--pine);
+    color:#fff;
+  }
+  .topbar h1{
+    font-size:15px;font-weight:700;letter-spacing:.02em;margin:0;
+  }
+  .topbar .sub{font-size:12.5px;color:#CFE3D6;margin:0}
+  .topbar .mark{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:#A7CBB4;font-weight:700;margin-right:.2rem;
+  }
+
+  .layout{
+    display:grid;
+    grid-template-columns:minmax(340px,420px) 1fr;
+    gap:0;
+    height:calc(100vh - 51px);
+  }
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr;height:auto}
+  }
+
+  .panel{overflow-y:auto;height:100%}
+  @media (max-width:900px){ .panel{height:auto} }
+
+  .controls{
+    background:var(--surface);
+    border-right:1px solid var(--line);
+    padding:18px 20px 60px;
+  }
+  .output{
+    padding:18px 22px 60px;
+    background:var(--paper);
+  }
+
+  .group{
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--surface);
+    margin-bottom:14px;
+    overflow:hidden;
+  }
+  .group > summary{
+    list-style:none;
+    cursor:pointer;
+    padding:11px 14px;
+    font-weight:700;
+    font-size:12.5px;
+    letter-spacing:.02em;
+    display:flex;align-items:center;justify-content:space-between;
+    user-select:none;
+  }
+  .group > summary::-webkit-details-marker{display:none}
+  .group > summary::after{
+    content:"";
+    width:8px;height:8px;
+    border-right:2px solid var(--stone);
+    border-bottom:2px solid var(--stone);
+    transform:rotate(-45deg);
+    transition:transform .15s ease;
+  }
+  .group[open] > summary::after{transform:rotate(45deg)}
+  .group .body{padding:4px 14px 15px}
+
+  label.field{display:block;margin:11px 0 0}
+  label.field > span.lab{
+    display:block;font-size:11.5px;color:var(--muted);
+    margin-bottom:4px;font-weight:600;letter-spacing:.01em;
+  }
+  input[type=text],input[type=number],select,textarea{
+    width:100%;font-family:var(--sans);font-size:13px;color:var(--ink);
+    background:#fff;border:1px solid var(--line-strong);border-radius:7px;
+    padding:7px 9px;
+  }
+  textarea{font-family:var(--mono);font-size:12px;line-height:1.45;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:0;border-color:var(--focus)}
+
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+  .check{
+    display:flex;align-items:center;gap:8px;margin:11px 0 0;cursor:pointer;
+    font-size:12.5px;color:var(--ink);font-weight:500;
+  }
+  .check input{width:15px;height:15px;accent-color:var(--pine-bright);margin:0}
+
+  .color-field{display:flex;align-items:center;gap:8px}
+  .color-field input[type=color]{
+    width:34px;height:30px;padding:0;border:1px solid var(--line-strong);
+    border-radius:6px;background:#fff;cursor:pointer;flex:0 0 auto;
+  }
+  .color-field input[type=text]{flex:1}
+  .color-field.disabled{opacity:.4;pointer-events:none}
+
+  .hint{font-size:11px;color:var(--muted);margin:6px 0 0;line-height:1.4}
+
+  .btn{
+    font-family:var(--sans);font-size:12.5px;font-weight:700;cursor:pointer;
+    border:1px solid var(--line-strong);background:#fff;color:var(--ink);
+    padding:7px 12px;border-radius:7px;
+  }
+  .btn:hover{border-color:var(--stone)}
+  .btn.primary{background:var(--pine);border-color:var(--pine);color:#fff}
+  .btn.primary:hover{background:var(--pine-bright);border-color:var(--pine-bright)}
+  .btn.tiny{padding:4px 9px;font-size:11.5px;font-weight:600}
+
+  .databar{display:flex;gap:8px;margin-top:8px}
+
+  /* per-column controls */
+  .cols{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .col-row{
+    display:flex;flex-direction:column;gap:7px;
+    padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:#FBFCFB;
+  }
+  .col-row .cname{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .col-row .ctrls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .col-row select{padding:4px 6px;font-size:12px;width:auto}
+  .col-row .opt{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer}
+  .col-row .opt input{width:14px;height:14px;accent-color:var(--pine-bright);margin:0}
+  .cols-empty{font-size:12px;color:var(--muted);padding:6px 0}
+
+  /* output side */
+  .out-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .out-head h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:700}
+  .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:7px;overflow:hidden}
+  .seg button{
+    border:0;background:#fff;color:var(--muted);font-weight:600;font-size:12px;
+    padding:6px 12px;cursor:pointer;font-family:var(--sans);
+  }
+  .seg button.on{background:var(--pine);color:#fff}
+
+  .preview-shell{
+    border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+    padding:14px;margin-bottom:18px;display:flex;justify-content:center;
+  }
+  .preview-frame{
+    border:0;width:100%;background:#fff;transition:width .2s ease;
+  }
+  .preview-frame.mobile{
+    width:380px;border:1px solid var(--line);border-radius:14px;
+  }
+
+  .code-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+  .code-actions{display:flex;gap:8px}
+  pre.code{
+    margin:0;background:#12211A;color:#D6E4DB;border-radius:var(--radius);
+    padding:14px;overflow:auto;max-height:340px;
+    font-family:var(--mono);font-size:11.5px;line-height:1.5;white-space:pre;
+  }
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:12.5px;
+    font-weight:600;opacity:0;pointer-events:none;transition:all .22s ease;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .banner{
+    background:var(--pine-tint);border:1px solid #CDE3D5;color:#204a34;
+    border-radius:8px;padding:9px 11px;font-size:11.5px;line-height:1.45;margin-bottom:14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="mark">Treeline</span>
+  <h1>Responsive Table Generator</h1>
+  <p class="sub">Paste from Sheets &rarr; style it &rarr; copy the HTML into a Squarespace code block.</p>
+</div>
+
+<div class="layout">
+
+  <!-- ===================== CONTROLS ===================== -->
+  <div class="panel controls">
+
+    <div class="banner">
+      <strong>HTML in cells is preserved.</strong> Paste your affiliate <code>&lt;a&gt;</code> links and
+      <code>&lt;strong&gt;</code> tags straight from your sheet — they render as-is, not as literal text.
+    </div>
+
+    <!-- DATA -->
+    <details class="group" open>
+      <summary>1 &nbsp;Data</summary>
+      <div class="body">
+        <label class="field">
+          <span class="lab">Paste your table (first row = headers)</span>
+          <textarea id="data" rows="9" spellcheck="false" placeholder="Copy cells from Google Sheets and paste here. Columns are tab-separated automatically."></textarea>
+        </label>
+        <label class="field">
+          <span class="lab">Column separator</span>
+          <select id="delim">
+            <option value="tab" selected>Tab (Google Sheets / Excel)</option>
+            <option value="comma">Comma (CSV)</option>
+          </select>
+        </label>
+        <div class="databar">
+          <button class="btn tiny" id="loadExample" type="button">Load example</button>
+          <button class="btn tiny" id="clearData" type="button">Clear</button>
+        </div>
+        <p class="hint" id="parseInfo"></p>
+      </div>
+    </details>
+
+    <!-- HEADER / SOURCE -->
+    <details class="group" open>
+      <summary>2 &nbsp;Title &amp; source</summary>
+      <div class="body">
+        <label class="check"><input type="checkbox" id="showHeader"> Show title block</label>
+        <label class="field">
+          <span class="lab">Headline</span>
+          <input type="text" id="hed" placeholder="e.g. Best Recovery Shoes">
+        </label>
+        <label class="field">
+          <span class="lab">Subhead</span>
+          <input type="text" id="dek" placeholder="Optional supporting line">
+        </label>
+        <label class="check" style="margin-top:14px"><input type="checkbox" id="showSource"> Show source line</label>
+        <div class="row">
+          <label class="field">
+            <span class="lab">Source label</span>
+            <input type="text" id="sourceLabel" value="Source">
+          </label>
+          <label class="field">
+            <span class="lab">Source text</span>
+            <input type="text" id="sourceText" placeholder="Treeline Review">
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <!-- TYPE -->
+    <details class="group" open>
+      <summary>3 &nbsp;Type</summary>
+      <div class="body">
+        <label class="field">
+          <span class="lab">Font family</span>
+          <select id="font">
+            <option value="'Lato', Helvetica, Arial, sans-serif">Lato</option>
+            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">System sans</option>
+            <option value="Helvetica, Arial, sans-serif">Helvetica / Arial</option>
+            <option value="'Inter', Helvetica, Arial, sans-serif">Inter</option>
+            <option value="'Montserrat', Helvetica, Arial, sans-serif" selected>Montserrat</option>
+            <option value="Georgia, 'Times New Roman', serif">Georgia (serif)</option>
+            <option value="'Merriweather', Georgia, serif">Merriweather (serif)</option>
+            <option value="Charter, 'Iowan Old Style', Georgia, serif">Charter (serif)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="fontImport" checked> Include Google Fonts import (if the font isn't already on the site)</label>
+        <div class="row">
+          <label class="field">
+            <span class="lab">Base font size (px)</span>
+            <input type="number" id="fontSize" value="16" min="10" max="28" step="1">
+          </label>
+          <label class="field">
+            <span class="lab">Cell density</span>
+            <select id="density">
+              <option value="tight">Tight</option>
+              <option value="normal" selected>Normal</option>
+              <option value="roomy">Roomy</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span class="lab">Text color</span>
+          <span class="color-field">
+            <input type="color" id="textColor" value="#222222">
+            <input type="text" id="textColorHex" value="#222222">
+          </span>
+        </label>
+      </div>
+    </details>
+
+    <!-- ALIGNMENT -->
+    <details class="group" open>
+      <summary>4 &nbsp;Alignment</summary>
+      <div class="body">
+        <div class="row">
+          <label class="field">
+            <span class="lab">Header — horizontal</span>
+            <select id="headAlign">
+              <option value="left" selected>Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="lab">Header — vertical</span>
+            <select id="headVAlign">
+              <option value="top">Top</option>
+              <option value="middle">Middle</option>
+              <option value="bottom" selected>Bottom</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">
+            <span class="lab">Body — horizontal</span>
+            <select id="bodyAlign">
+              <option value="left" selected>Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="lab">Body — vertical</span>
+            <select id="bodyVAlign">
+              <option value="top" selected>Top</option>
+              <option value="middle">Middle</option>
+              <option value="bottom">Bottom</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Per-column overrides live in section 6.</p>
+      </div>
+    </details>
+
+    <!-- LOOK -->
+    <details class="group">
+      <summary>5 &nbsp;Rows, borders &amp; color</summary>
+      <div class="body">
+        <label class="check"><input type="checkbox" id="zebra" checked> Zebra striping</label>
+        <label class="field" id="zebraColorWrap">
+          <span class="lab">Stripe color</span>
+          <span class="color-field">
+            <input type="color" id="zebraColor" value="#f6f6f6">
+            <input type="text" id="zebraColorHex" value="#f6f6f6">
+          </span>
+        </label>
+
+        <label class="check"><input type="checkbox" id="rowBorders" checked> Row divider lines</label>
+        <label class="field" id="rowBorderWrap">
+          <span class="lab">Divider color</span>
+          <span class="color-field">
+            <input type="color" id="rowBorderColor" value="#dddddd">
+            <input type="text" id="rowBorderColorHex" value="#dddddd">
+          </span>
+        </label>
+
+        <label class="check"><input type="checkbox" id="headFill" checked> Header background fill</label>
+        <label class="field" id="headBgWrap">
+          <span class="lab">Header fill / text</span>
+          <div class="row">
+            <span class="color-field">
+              <input type="color" id="headBg" value="#1f5c3d">
+              <input type="text" id="headBgHex" value="#1f5c3d">
+            </span>
+            <span class="color-field">
+              <input type="color" id="headColor" value="#ffffff">
+              <input type="text" id="headColorHex" value="#ffffff">
+            </span>
+          </div>
+        </label>
+
+        <div class="row" style="margin-top:6px">
+          <label class="field">
+            <span class="lab">Header underline (px)</span>
+            <input type="number" id="headBorderWidth" value="3" min="0" max="8" step="1">
+          </label>
+          <label class="field">
+            <span class="lab">Underline color</span>
+            <span class="color-field">
+              <input type="color" id="headBorderColor" value="#dddddd">
+            </span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="lab">Highlight rows (data row numbers, e.g. 1,4)</span>
+          <input type="text" id="highlightRows" placeholder="Leave blank for none">
+        </label>
+        <label class="field" id="highlightColorWrap">
+          <span class="lab">Highlight color</span>
+          <span class="color-field">
+            <input type="color" id="highlightColor" value="#dcf1f0">
+            <input type="text" id="highlightColorHex" value="#dcf1f0">
+          </span>
+        </label>
+      </div>
+    </details>
+
+    <!-- SORTING -->
+    <details class="group" open>
+      <summary>6 &nbsp;Reader sorting</summary>
+      <div class="body">
+        <label class="check"><input type="checkbox" id="sortable" checked> Let readers sort by clicking column headers</label>
+        <p class="hint">On desktop, headers become clickable (click again to reverse). On phones — where the header row is hidden — a small &ldquo;Sort by&hellip;&rdquo; menu appears above the table instead. Price and weight columns sort by number; text columns sort A&ndash;Z. Choose which columns are sortable in section 7.</p>
+      </div>
+    </details>
+
+    <!-- COLUMNS -->
+    <details class="group">
+      <summary>7 &nbsp;Per-column &amp; mobile</summary>
+      <div class="body">
+        <label class="field">
+          <span class="lab">Mobile breakpoint (px)</span>
+          <input type="number" id="breakpoint" value="600" min="320" max="1024" step="10">
+        </label>
+        <p class="hint">Below this width the table stacks into cards. Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock a column from reader sorting.</p>
+        <div class="cols" id="colControls">
+          <div class="cols-empty">Paste data to configure columns.</div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ADVANCED -->
+    <details class="group">
+      <summary>8 &nbsp;Advanced</summary>
+      <div class="body">
+        <label class="check"><input type="checkbox" id="scope" checked> Scope styles to this table</label>
+        <p class="hint">On (recommended): the CSS only affects this table, so you can put several differently-styled tables on one page without them clashing. Off: matches the classic shared-class output.</p>
+      </div>
+    </details>
+
+  </div>
+
+  <!-- ===================== OUTPUT ===================== -->
+  <div class="panel output">
+
+    <div class="out-head">
+      <h2>Live preview</h2>
+      <div class="seg" id="viewSeg">
+        <button data-view="desktop" class="on" type="button">Desktop</button>
+        <button data-view="mobile" type="button">Mobile</button>
+      </div>
+    </div>
+
+    <div class="preview-shell">
+      <iframe id="preview" class="preview-frame" title="Table preview"></iframe>
+    </div>
+
+    <div class="code-head">
+      <h2 style="text-transform:uppercase;font-size:12px;letter-spacing:.06em;color:var(--muted);margin:0;font-weight:700">HTML to paste into Squarespace</h2>
+      <div class="code-actions">
+        <button class="btn tiny" id="downloadBtn" type="button">Download .html</button>
+        <button class="btn primary tiny" id="copyBtn" type="button">Copy code</button>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var $ = function(id){ return document.getElementById(id); };
+  var columns = []; // {name, align, hideMobile}
+
+  /* ---------- delimited parser (handles quoted fields, doubled quotes, embedded newlines) ---------- */
+  function parseDelimited(text, delim){
+    var rows = [], row = [], field = "", i = 0, inQ = false, c, n;
+    var d = delim === "comma" ? "," : "\t";
+    text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    if(text.charAt(text.length-1) === "\n") text = text.slice(0, -1);
+    while(i < text.length){
+      c = text.charAt(i);
+      if(inQ){
+        if(c === '"'){
+          n = text.charAt(i+1);
+          if(n === '"'){ field += '"'; i += 2; continue; }
+          inQ = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if(c === '"'){ inQ = true; i++; continue; }
+      if(c === d){ row.push(field); field = ""; i++; continue; }
+      if(c === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += c; i++;
+    }
+    row.push(field); rows.push(row);
+    // drop fully empty trailing rows
+    rows = rows.filter(function(r){ return !(r.length === 1 && r[0].trim() === ""); });
+    return rows;
+  }
+
+  /* ---------- escaping ---------- */
+  function escAttr(s){
+    return String(s)
+      .replace(/<[^>]*>/g, "")        // strip any tags for the mobile data-title label
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  // cell / hed / dek / source content is passed through raw so embedded HTML (links) survives.
+
+  var DENSITY = { tight:"0.3em 0.4em", normal:"0.5em 0.65em", roomy:"0.75em 0.9em" };
+
+  var GOOGLE_IMPORTS = {
+    "'Lato', Helvetica, Arial, sans-serif":
+      "@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');",
+    "'Inter', Helvetica, Arial, sans-serif":
+      "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');",
+    "'Montserrat', Helvetica, Arial, sans-serif":
+      "@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');",
+    "'Merriweather', Georgia, serif":
+      "@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');"
+  };
+
+  function readConfig(){
+    return {
+      hed:        $("hed").value.trim(),
+      dek:        $("dek").value.trim(),
+      showHeader: $("showHeader").checked,
+      showSource: $("showSource").checked,
+      sourceLabel:$("sourceLabel").value.trim(),
+      sourceText: $("sourceText").value.trim(),
+      font:       $("font").value,
+      fontImport: $("fontImport").checked,
+      fontSize:   parseInt($("fontSize").value,10) || 16,
+      density:    DENSITY[$("density").value] || DENSITY.normal,
+      textColor:  $("textColor").value,
+      headAlign:  $("headAlign").value,
+      headVAlign: $("headVAlign").value,
+      bodyAlign:  $("bodyAlign").value,
+      bodyVAlign: $("bodyVAlign").value,
+      zebra:      $("zebra").checked,
+      zebraColor: $("zebraColor").value,
+      rowBorders: $("rowBorders").checked,
+      rowBorderColor: $("rowBorderColor").value,
+      headFill:   $("headFill").checked,
+      headBg:     $("headBg").value,
+      headColor:  $("headColor").value,
+      headBorderWidth: parseInt($("headBorderWidth").value,10),
+      headBorderColor: $("headBorderColor").value,
+      highlightRows: parseRows($("highlightRows").value),
+      highlightColor:$("highlightColor").value,
+      breakpoint: parseInt($("breakpoint").value,10) || 600,
+      sortable:   $("sortable").checked,
+      scope:      $("scope").checked
+    };
+  }
+
+  function parseRows(v){
+    if(!v) return {};
+    var set = {};
+    v.split(/[,\s]+/).forEach(function(x){
+      var n = parseInt(x,10);
+      if(n > 0) set[n] = true;
+    });
+    return set;
+  }
+
+  function buildCSS(cfg, wrapClass){
+    var P = cfg.scope ? "." + wrapClass + " " : "";
+    var css = [];
+    if(cfg.fontImport && GOOGLE_IMPORTS[cfg.font]) css.push(GOOGLE_IMPORTS[cfg.font]);
+
+    css.push(P + ".rg-container{font-family:" + cfg.font + ";font-size:" + cfg.fontSize + "px;line-height:1.4;margin:0;padding:1em .5em;color:" + cfg.textColor + ";}");
+    css.push(P + ".rg-header{margin-bottom:1em;text-align:" + cfg.headAlign + ";}");
+    css.push(P + ".rg-header>*{display:block;}");
+    css.push(P + ".rg-hed{font-weight:bold;font-size:1.4em;}");
+    css.push(P + ".rg-dek{font-size:1em;}");
+    css.push(P + ".rg-source{margin:0;font-size:.75em;text-align:right;}");
+    css.push(P + ".rg-source .pre-colon{text-transform:uppercase;}");
+    css.push(P + ".rg-source .post-colon{font-weight:bold;}");
+
+    css.push(P + "table.rg-table{width:100%;margin-bottom:.5em;font-size:1em;border-collapse:collapse;border-spacing:0;}");
+    if(cfg.headBorderWidth > 0)
+      css.push(P + "table.rg-table thead{border-bottom:" + cfg.headBorderWidth + "px solid " + cfg.headBorderColor + ";}");
+
+    var thBg = cfg.headFill ? "background:" + cfg.headBg + ";" : "";
+    var thColor = cfg.headFill ? cfg.headColor : cfg.textColor;
+    css.push(P + "table.rg-table th{" + thBg + "font-weight:bold;padding:" + cfg.density + ";font-size:.9em;text-align:" + cfg.headAlign + ";vertical-align:" + cfg.headVAlign + ";color:" + thColor + ";}");
+    css.push(P + "table.rg-table td{padding:" + cfg.density + ";font-size:.9em;text-align:" + cfg.bodyAlign + ";vertical-align:" + cfg.bodyVAlign + ";color:" + cfg.textColor + ";}");
+
+    if(cfg.rowBorders)
+      css.push(P + "table.rg-table tbody tr{border-bottom:1px solid " + cfg.rowBorderColor + ";}");
+    if(cfg.zebra)
+      css.push(P + "table.rg-table.zebra tbody tr:nth-child(even){background-color:" + cfg.zebraColor + ";}");
+
+    css.push(P + "table.rg-table tr.highlight{background-color:" + cfg.highlightColor + " !important;}");
+    css.push(P + "table.rg-table tr.highlight td{font-weight:bold;}");
+
+    // per-column horizontal alignment overrides (apply to header + body of that column)
+    columns.forEach(function(col, idx){
+      if(col.align && col.align !== "default"){
+        css.push(P + "table.rg-table th.rg-c" + idx + "," + P + "table.rg-table td.rg-c" + idx + "{text-align:" + col.align + ";}");
+      }
+    });
+
+    // sorting affordances (desktop clickable headers; sort bar hidden until mobile)
+    if(cfg.sortable){
+      css.push(P + "table.rg-table th.rg-sortable-col{cursor:pointer;-webkit-user-select:none;user-select:none;}");
+      css.push(P + "table.rg-table th.rg-sortable-col:after{content:'\u2195';opacity:.35;margin-left:.35em;font-size:.85em;font-weight:normal;}");
+      css.push(P + "table.rg-table th.rg-sortable-col[aria-sort=ascending]:after{content:'\u25B2';opacity:.9;}");
+      css.push(P + "table.rg-table th.rg-sortable-col[aria-sort=descending]:after{content:'\u25BC';opacity:.9;}");
+      css.push(P + "table.rg-table th.rg-sortable-col:hover{text-decoration:underline;}");
+      css.push(P + ".rg-sortbar{display:none;}");
+    }
+
+    // ---- mobile ----
+    var bp = cfg.breakpoint;
+    var m = [];
+    m.push(P + ".rg-container{max-width:" + Math.max(bp,320) + "px;margin:0 auto;}");
+    m.push(P + "table.rg-table{width:100%;}");
+    m.push(P + "table.rg-table tr.hide-mobile," + P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
+    m.push(P + "table.rg-table thead{display:none;}");
+    m.push(P + "table.rg-table tbody{width:100%;}");
+    m.push(P + "table.rg-table tr," + P + "table.rg-table th," + P + "table.rg-table td{display:block;padding:0;}");
+    m.push(P + "table.rg-table tr{border-bottom:none;margin:0 0 1em 0;padding:.5em;}");
+    if(cfg.zebra){
+      m.push(P + "table.rg-table.zebra tbody tr:nth-child(even){background-color:transparent;}");
+      m.push(P + "table.rg-table.zebra td:nth-child(even){background-color:" + cfg.zebraColor + ";}");
+    }
+    m.push(P + "table.rg-table td{padding:.5em 0 .25em 0;border-bottom:1px dotted #ccc;text-align:right;}");
+    m.push(P + "table.rg-table td[data-title]:before{content:attr(data-title);font-weight:bold;float:left;margin-right:.5em;font-size:.95em;}");
+    m.push(P + "table.rg-table td:last-child{padding-right:0;border-bottom:2px solid #ccc;}");
+    m.push(P + "table.rg-table td:empty{display:none;}");
+    m.push(P + "table.rg-table .highlight td{background-color:inherit;font-weight:normal;}");
+    if(cfg.sortable){
+      m.push(P + ".rg-sortbar{display:flex;align-items:center;gap:.5em;margin:0 0 .8em;font-size:.85em;color:" + cfg.textColor + ";}");
+      m.push(P + ".rg-sortbar .rg-sortbar-lab{font-weight:bold;}");
+      m.push(P + ".rg-sortbar select{font:inherit;color:inherit;padding:.35em .4em;border:1px solid #ccc;border-radius:5px;background:#fff;flex:1;}");
+      m.push(P + ".rg-sortbar .rg-sortdir{font:inherit;cursor:pointer;border:1px solid #ccc;border-radius:5px;background:#fff;padding:.35em .6em;line-height:1;}");
+    }
+
+    css.push("@media screen and (max-width:" + bp + "px){" + m.join("") + "}");
+    return css.join("\n");
+  }
+
+  function buildMarkup(cfg, rows, wrapClass, tableId){
+    if(!rows.length) return "";
+    var header = rows[0];
+    var body = rows.slice(1);
+    var out = [];
+
+    var wrapAttrs = 'id="tr-table-wrap" data-nosnippet' + (cfg.scope ? ' class="' + wrapClass + '"' : "");
+    var openWrap = '<div ' + wrapAttrs + '>\n';
+    var closeWrap = "\n</div>";
+
+    out.push(openWrap + '<div class="rg-container">');
+
+    // mobile sort bar — lists sortable columns that are visible on mobile
+    if(cfg.sortable){
+      var opts = [];
+      header.forEach(function(h, idx){
+        if(colSortable(idx) && !colHidden(idx)){
+          opts.push('        <option value="' + idx + '">' + escAttr(h) + '</option>');
+        }
+      });
+      if(opts.length){
+        out.push('  <div class="rg-sortbar">');
+        out.push('    <span class="rg-sortbar-lab">Sort by</span>');
+        out.push('    <select class="rg-sortsel" aria-label="Sort table by column">');
+        out.push('        <option value="">Choose&hellip;</option>');
+        out.push(opts.join("\n"));
+        out.push('    </select>');
+        out.push('    <button type="button" class="rg-sortdir" aria-label="Reverse sort direction">\u25B2</button>');
+        out.push('  </div>');
+      }
+    }
+
+    var tableClass = "rg-table" + (cfg.zebra ? " zebra" : "");
+    var tableIdAttr = cfg.sortable ? ' id="' + tableId + '"' : "";
+    out.push('  <table' + tableIdAttr + ' class="' + tableClass + '" summary="' + escAttr(cfg.hed || "Table") + '">');
+
+    if(cfg.showHeader && (cfg.hed || cfg.dek)){
+      out.push('    <caption class="rg-header">');
+      if(cfg.hed) out.push('      <span class="rg-hed">' + cfg.hed + '</span>');
+      if(cfg.dek) out.push('      <span class="rg-dek">' + cfg.dek + '</span>');
+      out.push('    </caption>');
+    }
+
+    // thead
+    out.push('    <thead>');
+    out.push('      <tr>');
+    header.forEach(function(h, idx){
+      var cls = "text rg-c" + idx + (colHidden(idx) ? " hide-mobile" : "");
+      var extra = "";
+      if(cfg.sortable && colSortable(idx)){
+        cls += " rg-sortable-col";
+        extra = ' data-col="' + idx + '" aria-sort="none" tabindex="0"';
+      }
+      out.push('        <th class="' + cls + '"' + extra + '>' + h + '</th>');
+    });
+    out.push('      </tr>');
+    out.push('    </thead>');
+
+    // tbody
+    out.push('    <tbody>');
+    body.forEach(function(r, rIdx){
+      var hi = cfg.highlightRows[rIdx + 1] ? " highlight" : "";
+      out.push('      <tr class="' + hi.trim() + '">');
+      header.forEach(function(h, cIdx){
+        var val = (r[cIdx] !== undefined) ? r[cIdx] : "";
+        var cls = "text rg-c" + cIdx + (colHidden(cIdx) ? " hide-mobile" : "");
+        out.push('        <td class="' + cls + '" data-title="' + escAttr(h) + '">' + val + '</td>');
+      });
+      out.push('      </tr>');
+    });
+    out.push('    </tbody>');
+    out.push('  </table>');
+
+    if(cfg.showSource && (cfg.sourceText || cfg.sourceLabel)){
+      out.push('  <div class="rg-source">');
+      out.push('    <span class="pre-colon">' + (cfg.sourceLabel || "Source") + '</span>: <span class="post-colon">' + (cfg.sourceText || "") + '</span>');
+      out.push('  </div>');
+    }
+
+    out.push('</div>' + closeWrap);
+    return out.join("\n");
+  }
+
+  function colHidden(idx){
+    return columns[idx] && columns[idx].hideMobile;
+  }
+  function colSortable(idx){
+    return !columns[idx] || columns[idx].sortable !== false;
+  }
+
+  function buildScript(cfg, tableId){
+    if(!cfg.sortable) return "";
+    var s = [];
+    s.push('<script>');
+    s.push('(function(){');
+    s.push('  var t=document.getElementById("' + tableId + '");');
+    s.push('  if(!t||!t.tBodies.length)return;');
+    s.push('  var tb=t.tBodies[0];');
+    s.push('  var rows=Array.prototype.slice.call(tb.rows);');
+    s.push('  rows.forEach(function(r,i){r.setAttribute("data-i",i);});');
+    s.push('  function ct(r,c){var x=r.cells[c];return x?(x.textContent||"").replace(/\\s+/g," ").trim():"";}');
+    s.push('  function nn(s){var m=String(s).replace(/,/g,"").match(/-?\\d+(?:\\.\\d+)?/);return m?parseFloat(m[0]):NaN;}');
+    s.push('  function numeric(c){var n=0,tot=0;rows.forEach(function(r){var v=ct(r,c);if(v==="")return;tot++;if(!isNaN(nn(v)))n++;});return tot>0&&n/tot>=0.6;}');
+    s.push('  var cur={col:-1,dir:1};');
+    s.push('  function sortBy(c,dir){');
+    s.push('    var num=numeric(c);');
+    s.push('    var s=rows.slice().sort(function(a,b){');
+    s.push('      var av=ct(a,c),bv=ct(b,c),r;');
+    s.push('      if(num){var an=nn(av),bn=nn(bv),ax=isNaN(an),bx=isNaN(bn);');
+    s.push('        if(ax&&bx)r=0;else if(ax)r=1;else if(bx)r=-1;else r=an-bn;}');
+    s.push('      else{r=av.toLowerCase().localeCompare(bv.toLowerCase());}');
+    s.push('      if(r===0)r=(+a.getAttribute("data-i"))-(+b.getAttribute("data-i"));');
+    s.push('      return r*dir;});');
+    s.push('    s.forEach(function(r){tb.appendChild(r);});');
+    s.push('    cur.col=c;cur.dir=dir;sync();');
+    s.push('  }');
+    s.push('  function sync(){');
+    s.push('    if(t.tHead){var h=t.tHead.rows[0].cells;for(var i=0;i<h.length;i++){');
+    s.push('      if((h[i].className||"").indexOf("rg-sortable-col")>-1){var hc=+h[i].getAttribute("data-col");');
+    s.push('        h[i].setAttribute("aria-sort",hc===cur.col?(cur.dir===1?"ascending":"descending"):"none");}}}');
+    s.push('    var box=t.closest?t.closest(".rg-container"):null;if(!box)return;');
+    s.push('    var sel=box.querySelector(".rg-sortsel");if(sel)sel.value=cur.col>-1?String(cur.col):"";');
+    s.push('    var db=box.querySelector(".rg-sortdir");if(db)db.textContent=cur.dir===1?"\\u25B2":"\\u25BC";');
+    s.push('  }');
+    s.push('  if(t.tHead){var hs=t.tHead.rows[0].cells;for(var i=0;i<hs.length;i++){(function(th){');
+    s.push('    if((th.className||"").indexOf("rg-sortable-col")<0)return;var c=+th.getAttribute("data-col");');
+    s.push('    function go(){sortBy(c,cur.col===c?-cur.dir:1);}');
+    s.push('    th.addEventListener("click",go);');
+    s.push('    th.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});');
+    s.push('  })(hs[i]);}}');
+    s.push('  var box=t.closest?t.closest(".rg-container"):null;');
+    s.push('  if(box){var sel=box.querySelector(".rg-sortsel"),db=box.querySelector(".rg-sortdir");');
+    s.push('    if(sel)sel.addEventListener("change",function(){if(sel.value==="")return;sortBy(+sel.value,1);});');
+    s.push('    if(db)db.addEventListener("click",function(){');
+    s.push('      if(cur.col<0){if(sel&&sel.options.length>1)sortBy(+sel.options[1].value,1);return;}');
+    s.push('      sortBy(cur.col,-cur.dir);});');
+    s.push('  }');
+    s.push('})();');
+    s.push('<\/script>');
+    return s.join("\n");
+  }
+
+  function generate(){
+    var cfg = readConfig();
+    var rows = parseDelimited($("data").value, $("delim").value);
+    reconcileColumns(rows.length ? rows[0] : []);
+
+    if(!rows.length || !rows[0].length || (rows.length === 1 && rows[0].length === 1 && rows[0][0] === "")){
+      $("parseInfo").textContent = "";
+      $("code").textContent = "";
+      renderPreview("<p style=\"font-family:sans-serif;color:#888;padding:20px\">Paste table data to see a preview.</p>");
+      return;
+    }
+
+    var h = hash($("data").value + cfg.font + cfg.fontSize + cfg.headAlign);
+    var wrapClass = "rgt-" + h;
+    var tableId = "tr-table-" + h;
+    var css = buildCSS(cfg, wrapClass);
+    var markup = buildMarkup(cfg, rows, wrapClass, tableId);
+    var script = buildScript(cfg, tableId);
+    var full = "<style>\n" + css + "\n</style>\n" + markup + (script ? "\n" + script : "");
+
+    $("parseInfo").textContent = rows.length + " row" + (rows.length===1?"":"s") + " (" + (rows.length-1) + " data + 1 header), " + rows[0].length + " columns.";
+    $("code").textContent = full;
+    renderPreview(full);
+  }
+
+  function hash(str){
+    var h = 5381, i = str.length;
+    while(i) h = (h * 33) ^ str.charCodeAt(--i);
+    return (h >>> 0).toString(36).slice(0,6);
+  }
+
+  function renderPreview(html){
+    var frame = $("preview");
+    var doc = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head><body style='margin:0;padding:8px;background:#fff'>" + html + "</body></html>";
+    frame.srcdoc = doc;
+    frame.onload = sizeFrame;
+  }
+  function sizeFrame(){
+    try{
+      var frame = $("preview");
+      var h = frame.contentWindow.document.body.scrollHeight;
+      frame.style.height = (h + 8) + "px";
+    }catch(e){}
+  }
+
+  /* ---------- per-column controls ---------- */
+  function reconcileColumns(headers){
+    if(headers.length === columns.length){
+      headers.forEach(function(h,i){ columns[i].name = h; });
+    } else {
+      columns = headers.map(function(h){ return { name:h, align:"default", hideMobile:false, sortable:true }; });
+    }
+    renderColumnControls();
+  }
+
+  function renderColumnControls(){
+    var wrap = $("colControls");
+    if(!columns.length){
+      wrap.innerHTML = '<div class="cols-empty">Paste data to configure columns.</div>';
+      return;
+    }
+    wrap.innerHTML = "";
+    columns.forEach(function(col, idx){
+      var row = document.createElement("div");
+      row.className = "col-row";
+
+      var name = document.createElement("div");
+      name.className = "cname";
+      name.textContent = (col.name || "Column " + (idx+1)).replace(/<[^>]*>/g,"") || ("Column " + (idx+1));
+      name.title = name.textContent;
+
+      var ctrls = document.createElement("div");
+      ctrls.className = "ctrls";
+
+      var sel = document.createElement("select");
+      [["default","Default align"],["left","Left"],["center","Center"],["right","Right"]].forEach(function(o){
+        var opt = document.createElement("option");
+        opt.value = o[0]; opt.textContent = o[1];
+        if(col.align === o[0]) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function(){ col.align = sel.value; generate(); });
+
+      var mob = document.createElement("label");
+      mob.className = "opt";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = !col.hideMobile;
+      cb.addEventListener("change", function(){ col.hideMobile = !cb.checked; generate(); });
+      mob.appendChild(cb);
+      mob.appendChild(document.createTextNode("Show on mobile"));
+
+      var srt = document.createElement("label");
+      srt.className = "opt";
+      var scb = document.createElement("input");
+      scb.type = "checkbox"; scb.checked = col.sortable !== false;
+      scb.addEventListener("change", function(){ col.sortable = scb.checked; generate(); });
+      srt.appendChild(scb);
+      srt.appendChild(document.createTextNode("Sortable"));
+
+      ctrls.appendChild(sel);
+      ctrls.appendChild(mob);
+      ctrls.appendChild(srt);
+
+      row.appendChild(name);
+      row.appendChild(ctrls);
+      wrap.appendChild(row);
+    });
+  }
+
+  /* ---------- color pickers <-> hex text sync ---------- */
+  function linkColor(colorId, hexId){
+    var c = $(colorId), h = $(hexId);
+    if(!c || !h) return;
+    c.addEventListener("input", function(){ h.value = c.value; generate(); });
+    h.addEventListener("input", function(){
+      if(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(h.value.trim())){ c.value = h.value.trim(); generate(); }
+    });
+  }
+
+  /* ---------- enable/disable dependent color fields ---------- */
+  function toggleDep(){
+    $("zebraColorWrap").style.display   = $("zebra").checked ? "" : "none";
+    $("rowBorderWrap").style.display    = $("rowBorders").checked ? "" : "none";
+    $("headBgWrap").classList.toggle("disabled", !$("headFill").checked);
+    $("highlightColorWrap").style.display = Object.keys(parseRows($("highlightRows").value)).length ? "" : "none";
+  }
+
+  /* ---------- events ---------- */
+  var debounceTimer;
+  function debounced(){
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(generate, 160);
+  }
+
+  function bind(){
+    // any input in controls regenerates
+    document.querySelectorAll(".controls input, .controls select, .controls textarea").forEach(function(el){
+      var ev = (el.type === "text" || el.tagName === "TEXTAREA" || el.type === "number") ? "input" : "change";
+      el.addEventListener(ev, function(){
+        toggleDep();
+        if(el.id === "data" || el.tagName === "TEXTAREA") debounced();
+        else generate();
+      });
+    });
+
+    linkColor("textColor","textColorHex");
+    linkColor("zebraColor","zebraColorHex");
+    linkColor("rowBorderColor","rowBorderColorHex");
+    linkColor("headBg","headBgHex");
+    linkColor("headColor","headColorHex");
+    linkColor("highlightColor","highlightColorHex");
+
+    // view toggle
+    $("viewSeg").addEventListener("click", function(e){
+      var b = e.target.closest("button"); if(!b) return;
+      document.querySelectorAll("#viewSeg button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on");
+      $("preview").classList.toggle("mobile", b.dataset.view === "mobile");
+      setTimeout(sizeFrame, 60);
+    });
+
+    $("copyBtn").addEventListener("click", function(){
+      var text = $("code").textContent;
+      if(!text){ toast("Nothing to copy yet"); return; }
+      copy(text);
+    });
+
+    $("downloadBtn").addEventListener("click", function(){
+      var text = $("code").textContent;
+      if(!text){ toast("Nothing to download yet"); return; }
+      var blob = new Blob([text], {type:"text/html"});
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (($("hed").value.trim() || "treeline-table").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")) + ".html";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    });
+
+    $("loadExample").addEventListener("click", function(){
+      $("data").value = EXAMPLE;
+      $("hed").value = "Best Recovery Shoes";
+      $("dek").value = "Our picks for post-hike recovery, compared.";
+      $("sourceText").value = "Treeline Review";
+      generate();
+    });
+    $("clearData").addEventListener("click", function(){
+      $("data").value = ""; columns = []; generate();
+    });
+  }
+
+  function copy(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ toast("Copied to clipboard"); }, fallbackCopy.bind(null,text));
+    } else { fallbackCopy(text); }
+  }
+  function fallbackCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast("Copied to clipboard"); }catch(e){ toast("Copy failed — select the code manually"); }
+    document.body.removeChild(ta);
+  }
+  var toastTimer;
+  function toast(msg){
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+  }
+
+  var EXAMPLE = [
+    "Recovery Shoe\tType\tMidsole\tWeight (pair)\tMSRP",
+    "<strong>HOKA ORA Recovery 3 Slide</strong>\tSlip-on\tSugarcane EVA\t15.6 oz\t$60",
+    "<strong>OOFOS OOahh Slide</strong>\tSlip-on\tOOfoam\t9.9 oz\t$60",
+    "<strong>Birkenstock Arizona Essentials</strong>\tSandal\tEVA\t8.0 oz\t$60",
+    "<strong>Topo Athletic Revive</strong>\tSlipper\tEVA\t15.6 oz\t$125"
+  ].join("\n");
+
+  // init
+  bind();
+  toggleDep();
+  generate();
+})();
+</script>
+</body>
+</html>
