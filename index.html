@@ -420,7 +420,7 @@
       <summary>6 &nbsp;Reader sorting</summary>
       <div class="body">
         <label class="check"><input type="checkbox" id="sortable" checked> Let readers sort by clicking column headers</label>
-        <p class="hint">On desktop, headers become clickable (click again to reverse). On phones — where the header row is hidden — a small &ldquo;Sort by&hellip;&rdquo; menu appears above the table instead. Price and weight columns sort by number; text columns sort A&ndash;Z. Choose which columns are sortable in section 7.</p>
+        <p class="hint">On desktop, headers become clickable (click again to reverse). On phones it depends on your mobile layout (section 7): with <em>stacked cards</em> a small &ldquo;Sort by&hellip;&rdquo; menu appears above the table; with a <em>scrollable table</em> the headers stay tappable. Price and weight columns sort by number; text columns sort A&ndash;Z. Choose which columns are sortable in section 7.</p>
       </div>
     </details>
 
@@ -429,10 +429,17 @@
       <summary>7 &nbsp;Per-column &amp; mobile</summary>
       <div class="body">
         <label class="field">
+          <span class="lab">Mobile layout</span>
+          <select id="mobileLayout">
+            <option value="cards" selected>Stacked cards (header row hidden)</option>
+            <option value="scroll">Scrollable table (keeps header row)</option>
+          </select>
+        </label>
+        <label class="field">
           <span class="lab">Mobile breakpoint (px)</span>
           <input type="number" id="breakpoint" value="600" min="320" max="1024" step="10">
         </label>
-        <p class="hint">Below this width the table stacks into cards. Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock a column from reader sorting.</p>
+        <p class="hint">Below the breakpoint the table switches to your chosen mobile layout. <strong>Stacked cards</strong> reflows each row into a labeled card (header row hidden). <strong>Scrollable table</strong> keeps the real table &mdash; so bottom-aligned headers and tappable sorting work on phones &mdash; and readers swipe sideways to see all columns. Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock it from reader sorting.</p>
         <div class="cols" id="colControls">
           <div class="cols-empty">Paste data to configure columns.</div>
         </div>
@@ -567,6 +574,7 @@
       highlightRows: parseRows($("highlightRows").value),
       highlightColor:$("highlightColor").value,
       breakpoint: parseInt($("breakpoint").value,10) || 600,
+      mobileLayout: $("mobileLayout").value,
       sortable:   $("sortable").checked,
       scope:      $("scope").checked
     };
@@ -633,23 +641,36 @@
     // ---- mobile ----
     var bp = cfg.breakpoint;
     var m = [];
-    m.push(P + ".rg-container{max-width:" + Math.max(bp,320) + "px;margin:0 auto;}");
-    m.push(P + "table.rg-table{width:100%;}");
-    m.push(P + "table.rg-table tr.hide-mobile," + P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
-    m.push(P + "table.rg-table thead{display:none;}");
-    m.push(P + "table.rg-table tbody{width:100%;}");
-    m.push(P + "table.rg-table tr," + P + "table.rg-table th," + P + "table.rg-table td{display:block;padding:0;}");
-    m.push(P + "table.rg-table tr{border-bottom:none;margin:0 0 1em 0;padding:.5em;}");
-    if(cfg.zebra){
-      m.push(P + "table.rg-table.zebra tbody tr:nth-child(even){background-color:transparent;}");
-      m.push(P + "table.rg-table.zebra td:nth-child(even){background-color:" + cfg.zebraColor + ";}");
+    var sortbarOnMobile = cfg.sortable && cfg.mobileLayout === "cards";
+
+    if(cfg.mobileLayout === "scroll"){
+      // keep the real table; scroll sideways so headers + vertical-align survive
+      m.push(P + ".rg-container{max-width:100%;margin:0 auto;}");
+      m.push(P + ".rg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}");
+      var minW = Math.max(bp - 40, columns.length * 120);
+      m.push(P + ".rg-scroll table.rg-table{min-width:" + minW + "px;}");
+      m.push(P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
+    } else {
+      // stacked cards (original responsive behavior)
+      m.push(P + ".rg-container{max-width:" + Math.max(bp,320) + "px;margin:0 auto;}");
+      m.push(P + "table.rg-table{width:100%;}");
+      m.push(P + "table.rg-table tr.hide-mobile," + P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
+      m.push(P + "table.rg-table thead{display:none;}");
+      m.push(P + "table.rg-table tbody{width:100%;}");
+      m.push(P + "table.rg-table tr," + P + "table.rg-table th," + P + "table.rg-table td{display:block;padding:0;}");
+      m.push(P + "table.rg-table tr{border-bottom:none;margin:0 0 1em 0;padding:.5em;}");
+      if(cfg.zebra){
+        m.push(P + "table.rg-table.zebra tbody tr:nth-child(even){background-color:transparent;}");
+        m.push(P + "table.rg-table.zebra td:nth-child(even){background-color:" + cfg.zebraColor + ";}");
+      }
+      m.push(P + "table.rg-table td{padding:.5em 0 .25em 0;border-bottom:1px dotted #ccc;text-align:right;}");
+      m.push(P + "table.rg-table td[data-title]:before{content:attr(data-title);font-weight:bold;float:left;margin-right:.5em;font-size:.95em;}");
+      m.push(P + "table.rg-table td:last-child{padding-right:0;border-bottom:2px solid #ccc;}");
+      m.push(P + "table.rg-table td:empty{display:none;}");
+      m.push(P + "table.rg-table .highlight td{background-color:inherit;font-weight:normal;}");
     }
-    m.push(P + "table.rg-table td{padding:.5em 0 .25em 0;border-bottom:1px dotted #ccc;text-align:right;}");
-    m.push(P + "table.rg-table td[data-title]:before{content:attr(data-title);font-weight:bold;float:left;margin-right:.5em;font-size:.95em;}");
-    m.push(P + "table.rg-table td:last-child{padding-right:0;border-bottom:2px solid #ccc;}");
-    m.push(P + "table.rg-table td:empty{display:none;}");
-    m.push(P + "table.rg-table .highlight td{background-color:inherit;font-weight:normal;}");
-    if(cfg.sortable){
+
+    if(sortbarOnMobile){
       m.push(P + ".rg-sortbar{display:flex;align-items:center;gap:.5em;margin:0 0 .8em;font-size:.85em;color:" + cfg.textColor + ";}");
       m.push(P + ".rg-sortbar .rg-sortbar-lab{font-weight:bold;}");
       m.push(P + ".rg-sortbar select{font:inherit;color:inherit;padding:.35em .4em;border:1px solid #ccc;border-radius:5px;background:#fff;flex:1;}");
@@ -672,8 +693,8 @@
 
     out.push(openWrap + '<div class="rg-container">');
 
-    // mobile sort bar — lists sortable columns that are visible on mobile
-    if(cfg.sortable){
+    // mobile sort bar — only for stacked-cards layout (in scroll mode the headers stay tappable)
+    if(cfg.sortable && cfg.mobileLayout === "cards"){
       var opts = [];
       header.forEach(function(h, idx){
         if(colSortable(idx) && !colHidden(idx)){
@@ -692,6 +713,8 @@
       }
     }
 
+    var scroll = cfg.mobileLayout === "scroll";
+    if(scroll) out.push('  <div class="rg-scroll">');
     var tableClass = "rg-table" + (cfg.zebra ? " zebra" : "");
     var tableIdAttr = cfg.sortable ? ' id="' + tableId + '"' : "";
     out.push('  <table' + tableIdAttr + ' class="' + tableClass + '" summary="' + escAttr(cfg.hed || "Table") + '">');
@@ -732,6 +755,7 @@
     });
     out.push('    </tbody>');
     out.push('  </table>');
+    if(scroll) out.push('  </div>');
 
     if(cfg.showSource && (cfg.sourceText || cfg.sourceLabel)){
       out.push('  <div class="rg-source">');
