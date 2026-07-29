@@ -495,7 +495,7 @@
 
   /* ---------- delimited parser (handles quoted fields, doubled quotes, embedded newlines) ---------- */
   function parseDelimited(text, delim){
-    var rows = [], row = [], field = "", i = 0, inQ = false, c, n;
+    var rows = [], row = [], field = "", i = 0, inQ = false, atStart = true, c, n;
     var d = delim === "comma" ? "," : "\t";
     text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     if(text.charAt(text.length-1) === "\n") text = text.slice(0, -1);
@@ -509,10 +509,12 @@
         }
         field += c; i++; continue;
       }
-      if(c === '"'){ inQ = true; i++; continue; }
-      if(c === d){ row.push(field); field = ""; i++; continue; }
-      if(c === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
-      field += c; i++;
+      // A double-quote only wraps a cell when it OPENS the cell. Anywhere else
+      // it is a literal character (e.g. an inch mark: 7"), not a delimiter.
+      if(c === '"' && atStart){ inQ = true; atStart = false; i++; continue; }
+      if(c === d){ row.push(field); field = ""; atStart = true; i++; continue; }
+      if(c === "\n"){ row.push(field); rows.push(row); row = []; field = ""; atStart = true; i++; continue; }
+      field += c; atStart = false; i++;
     }
     row.push(field); rows.push(row);
     // drop fully empty trailing rows
