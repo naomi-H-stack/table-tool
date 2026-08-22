@@ -262,6 +262,11 @@
             <input type="text" id="sourceText" placeholder="Treeline Review">
           </label>
         </div>
+        <label class="field" style="margin-top:14px">
+          <span class="lab">Accessible description</span>
+          <input type="text" id="tableDesc" placeholder="e.g. Women's running shorts compared by features">
+        </label>
+        <p class="hint">Describes the table for screen readers and assistive tech (becomes the table's <code>aria-label</code>, replacing the old empty <code>summary="Table"</code>). It isn't shown on the page, so it won't collide with <code>data-nosnippet</code>.</p>
       </div>
     </details>
 
@@ -431,15 +436,19 @@
         <label class="field">
           <span class="lab">Mobile layout</span>
           <select id="mobileLayout">
-            <option value="cards">Stacked cards (header row hidden)</option>
-            <option value="scroll" selected>Scrollable table (keeps header row)</option>
+            <option value="cards" selected>Stacked cards (header row hidden)</option>
+            <option value="scroll">Scrollable table (keeps header row)</option>
           </select>
         </label>
         <label class="field">
           <span class="lab">Mobile breakpoint (px)</span>
           <input type="number" id="breakpoint" value="600" min="320" max="1024" step="10">
         </label>
-        <p class="hint">Below the breakpoint the table switches to your chosen mobile layout. <strong>Stacked cards</strong> reflows each row into a labeled card (header row hidden). <strong>Scrollable table</strong> keeps the real table &mdash; so bottom-aligned headers and tappable sorting work on phones &mdash; and readers swipe sideways to see all columns. Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock it from reader sorting.</p>
+        <label class="field">
+          <span class="lab">Hide last N rows on phones</span>
+          <input type="number" id="hideRowsMobile" value="0" min="0" step="1">
+        </label>
+        <p class="hint">Below the breakpoint the table switches to your chosen mobile layout. <strong>Stacked cards</strong> (default) reflows each row into a labeled card. <strong>Scrollable table</strong> keeps the real table &mdash; so bottom-aligned headers and tappable sorting work on phones &mdash; and shows a &ldquo;Swipe to compare &rarr;&rdquo; cue so readers notice the off-screen columns. <strong>Hide last N rows</strong> drops your lowest-priority products on phones (assuming winners are listed first). Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock it from reader sorting.</p>
         <div class="cols" id="colControls">
           <div class="cols-empty">Paste data to configure columns.</div>
         </div>
@@ -452,6 +461,8 @@
       <div class="body">
         <label class="check"><input type="checkbox" id="scope" checked> Scope styles to this table</label>
         <p class="hint">On (recommended): the CSS only affects this table, so you can put several differently-styled tables on one page without them clashing. Off: matches the classic shared-class output.</p>
+        <label class="check"><input type="checkbox" id="noSnippet" checked> Add <code>data-nosnippet</code> to the wrapper</label>
+        <p class="hint">On (Treeline default): tells Google to keep this table out of search snippets and AI overviews, so it can't pull ugly table fragments. Turn off for tables you'd actually like surfaced.</p>
       </div>
     </details>
 
@@ -551,6 +562,7 @@
     return {
       hed:        $("hed").value.trim(),
       dek:        $("dek").value.trim(),
+      tableDesc:  $("tableDesc").value.trim(),
       showHeader: $("showHeader").checked,
       showSource: $("showSource").checked,
       sourceLabel:$("sourceLabel").value.trim(),
@@ -577,7 +589,9 @@
       highlightColor:$("highlightColor").value,
       breakpoint: parseInt($("breakpoint").value,10) || 600,
       mobileLayout: $("mobileLayout").value,
+      hideRowsMobile: Math.max(0, parseInt($("hideRowsMobile").value,10) || 0),
       sortable:   $("sortable").checked,
+      noSnippet:  $("noSnippet").checked,
       scope:      $("scope").checked
     };
   }
@@ -644,6 +658,7 @@
     var bp = cfg.breakpoint;
     var m = [];
     var sortbarOnMobile = cfg.sortable && cfg.mobileLayout === "cards";
+    if(cfg.mobileLayout === "scroll"){ css.push(P + ".rg-swipe{display:none;}"); }
 
     if(cfg.mobileLayout === "scroll"){
       // keep the real table; scroll sideways so headers + vertical-align survive
@@ -651,7 +666,8 @@
       m.push(P + ".rg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}");
       var minW = Math.max(bp - 40, columns.length * 120);
       m.push(P + ".rg-scroll table.rg-table{min-width:" + minW + "px;}");
-      m.push(P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
+      m.push(P + "table.rg-table tr.hide-mobile," + P + "table.rg-table th.hide-mobile," + P + "table.rg-table td.hide-mobile{display:none;}");
+      m.push(P + ".rg-swipe{display:flex;justify-content:flex-end;align-items:center;gap:.3em;font-size:.8em;font-weight:bold;color:" + cfg.textColor + ";opacity:.65;margin:0 0 .45em;}");
     } else {
       // stacked cards (original responsive behavior)
       m.push(P + ".rg-container{max-width:" + Math.max(bp,320) + "px;margin:0 auto;}");
@@ -689,7 +705,7 @@
     var body = rows.slice(1);
     var out = [];
 
-    var wrapAttrs = 'id="tr-table-wrap" data-nosnippet' + (cfg.scope ? ' class="' + wrapClass + '"' : "");
+    var wrapAttrs = 'id="tr-table-wrap"' + (cfg.noSnippet ? ' data-nosnippet' : "") + (cfg.scope ? ' class="' + wrapClass + '"' : "");
     var openWrap = '<div ' + wrapAttrs + '>\n';
     var closeWrap = "\n</div>";
 
@@ -716,10 +732,14 @@
     }
 
     var scroll = cfg.mobileLayout === "scroll";
-    if(scroll) out.push('  <div class="rg-scroll">');
+    if(scroll){
+      out.push('  <div class="rg-swipe" aria-hidden="true">Swipe to compare \u2192</div>');
+      out.push('  <div class="rg-scroll">');
+    }
     var tableClass = "rg-table" + (cfg.zebra ? " zebra" : "");
     var tableIdAttr = cfg.sortable ? ' id="' + tableId + '"' : "";
-    out.push('  <table' + tableIdAttr + ' class="' + tableClass + '" summary="' + escAttr(cfg.hed || "Table") + '">');
+    var accName = cfg.tableDesc || cfg.hed || "Comparison table";
+    out.push('  <table' + tableIdAttr + ' class="' + tableClass + '" aria-label="' + escAttr(accName) + '">');
 
     if(cfg.showHeader && (cfg.hed || cfg.dek)){
       out.push('    <caption class="rg-header">');
@@ -745,9 +765,11 @@
 
     // tbody
     out.push('    <tbody>');
+    var hideFrom = cfg.hideRowsMobile > 0 ? Math.max(0, body.length - cfg.hideRowsMobile) : body.length;
     body.forEach(function(r, rIdx){
       var hi = cfg.highlightRows[rIdx + 1] ? " highlight" : "";
-      out.push('      <tr class="' + hi.trim() + '">');
+      var hm = (rIdx >= hideFrom) ? " hide-mobile" : "";
+      out.push('      <tr class="' + (hi + hm).trim() + '">');
       header.forEach(function(h, cIdx){
         var val = (r[cIdx] !== undefined) ? r[cIdx] : "";
         var cls = "text rg-c" + cIdx + (colHidden(cIdx) ? " hide-mobile" : "");
