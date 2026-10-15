@@ -424,7 +424,7 @@
     <details class="group" open>
       <summary>6 &nbsp;Reader sorting</summary>
       <div class="body">
-        <label class="check"><input type="checkbox" id="sortable" checked> Let readers sort by clicking column headers</label>
+        <label class="check"><input type="checkbox" id="sortable"> Let readers sort by clicking column headers</label>
         <p class="hint">On desktop, headers become clickable (click again to reverse). On phones it depends on your mobile layout (section 7): with <em>stacked cards</em> a small &ldquo;Sort by&hellip;&rdquo; menu appears above the table; with a <em>scrollable table</em> the headers stay tappable. Price and weight columns sort by number; text columns sort A&ndash;Z. Choose which columns are sortable in section 7.</p>
       </div>
     </details>
@@ -681,7 +681,8 @@
         m.push(P + "table.rg-table.zebra tbody tr:nth-child(even){background-color:transparent;}");
         m.push(P + "table.rg-table.zebra td:nth-child(even){background-color:" + cfg.zebraColor + ";}");
       }
-      m.push(P + "table.rg-table td{padding:.5em 0 .25em 0;border-bottom:1px dotted #ccc;text-align:right;}");
+      // force right-align for every data cell on mobile, overriding any global or per-column alignment
+      m.push(P + "table.rg-table td{padding:.5em 0 .25em 0;border-bottom:1px dotted #ccc;text-align:right !important;}");
       m.push(P + "table.rg-table td[data-title]:before{content:attr(data-title);font-weight:bold;float:left;margin-right:.5em;font-size:.95em;}");
       m.push(P + "table.rg-table td:last-child{padding-right:0;border-bottom:2px solid #ccc;}");
       m.push(P + "table.rg-table td:empty{display:none;}");
@@ -705,7 +706,8 @@
     var body = rows.slice(1);
     var out = [];
 
-    var wrapAttrs = 'id="tr-table-wrap"' + (cfg.noSnippet ? ' data-nosnippet' : "") + (cfg.scope ? ' class="' + wrapClass + '"' : "");
+    var wrapperId = tableId.replace("tr-table-", "tr-table-wrap-");
+    var wrapAttrs = 'id="' + wrapperId + '"' + (cfg.noSnippet ? ' data-nosnippet' : "") + (cfg.scope ? ' class="' + wrapClass + '"' : "");
     var openWrap = '<div ' + wrapAttrs + '>\n';
     var closeWrap = "\n</div>";
 
@@ -862,7 +864,9 @@
       return;
     }
 
-    var h = hash($("data").value + cfg.font + cfg.fontSize + cfg.headAlign);
+    // Unique per generated table: a content hash plus a guaranteed-unique suffix,
+    // so two tables with identical data can never share a scope class or id.
+    var h = hash($("data").value + cfg.font + cfg.fontSize + cfg.headAlign) + uniqueSuffix();
     var wrapClass = "rgt-" + h;
     var tableId = "tr-table-" + h;
     var css = buildCSS(cfg, wrapClass);
@@ -879,6 +883,12 @@
     var h = 5381, i = str.length;
     while(i) h = (h * 33) ^ str.charCodeAt(--i);
     return (h >>> 0).toString(36).slice(0,6);
+  }
+
+  var _uidSeq = 0;
+  function uniqueSuffix(){
+    _uidSeq++;
+    return _uidSeq.toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
   function renderPreview(html){
