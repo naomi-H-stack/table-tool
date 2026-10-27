@@ -448,7 +448,21 @@
           <span class="lab">Hide last N rows on phones</span>
           <input type="number" id="hideRowsMobile" value="0" min="0" step="1">
         </label>
-        <p class="hint">Below the breakpoint the table switches to your chosen mobile layout. <strong>Stacked cards</strong> (default) reflows each row into a labeled card. <strong>Scrollable table</strong> keeps the real table &mdash; so bottom-aligned headers and tappable sorting work on phones &mdash; and shows a &ldquo;Swipe to compare &rarr;&rdquo; cue so readers notice the off-screen columns. <strong>Hide last N rows</strong> drops your lowest-priority products on phones (assuming winners are listed first). Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock it from reader sorting.</p>
+        <div class="row">
+          <label class="field">
+            <span class="lab">Show max rows on mobile (0 = all)</span>
+            <input type="number" id="maxRowsMobile" value="0" min="0" step="1">
+          </label>
+          <label class="field">
+            <span class="lab">&ldquo;Show all&rdquo; button label</span>
+            <input type="text" id="moreButtonText" value="Show all">
+          </label>
+        </div>
+        <label class="field">
+          <span class="lab">Collapse button label</span>
+          <input type="text" id="moreLessText" value="Show less">
+        </label>
+        <p class="hint">Below the breakpoint the table switches to your chosen mobile layout. <strong>Stacked cards</strong> (default) reflows each row into a labeled card. <strong>Scrollable table</strong> keeps the real table &mdash; so bottom-aligned headers and tappable sorting work on phones &mdash; and shows a &ldquo;Swipe to compare &rarr;&rdquo; cue so readers notice the off-screen columns. <strong>Show max rows</strong> (stacked cards only) shows just the first few products on phones and adds a tappable button to reveal the rest; set the button labels alongside it. <strong>Hide last N rows</strong> permanently drops your lowest-priority products on phones (no reveal button). Per column: set alignment, untick <em>Show on mobile</em> to hide it on phones, or untick <em>Sortable</em> to lock it from reader sorting.</p>
         <div class="cols" id="colControls">
           <div class="cols-empty">Paste data to configure columns.</div>
         </div>
@@ -590,6 +604,9 @@
       breakpoint: parseInt($("breakpoint").value,10) || 600,
       mobileLayout: $("mobileLayout").value,
       hideRowsMobile: Math.max(0, parseInt($("hideRowsMobile").value,10) || 0),
+      maxRowsMobile: Math.max(0, parseInt($("maxRowsMobile").value,10) || 0),
+      moreButtonText: $("moreButtonText").value.trim() || "Show all",
+      moreLessText: $("moreLessText").value.trim() || "Show less",
       sortable:   $("sortable").checked,
       noSnippet:  $("noSnippet").checked,
       scope:      $("scope").checked
@@ -696,6 +713,17 @@
       m.push(P + ".rg-sortbar .rg-sortdir{font:inherit;cursor:pointer;border:1px solid #ccc;border-radius:5px;background:#fff;padding:.35em .6em;line-height:1;}");
     }
 
+    // "Show all" / collapsible rows — stacked-cards layout only
+    var moreOnMobile = cfg.mobileLayout === "cards" && cfg.maxRowsMobile > 0;
+    if(moreOnMobile){
+      css.push(P + ".rg-table-more-wrap{display:none;}");            // hidden on desktop
+      m.push(P + "table.rg-table tr.rg-more-mobile{display:none;}"); // collapsed rows on mobile
+      m.push(P + ".rg-table-more-wrap{display:block;margin:1em 0;text-align:center;}");
+      m.push(P + ".rg-table-more-wrap .rg-table-more-button{appearance:none;-webkit-appearance:none;background:#990f05;border:1px solid #990f05;border-radius:4px;color:#fff;cursor:pointer;font:inherit;font-weight:bold;line-height:1.4;min-height:44px;padding:.7em 1.2em;text-transform:none;}");
+      m.push(P + ".rg-table-more-wrap .rg-table-more-button:hover{background:#7d0c04;border-color:#7d0c04;}");
+      m.push(P + ".rg-table-more-wrap .rg-table-more-button:focus-visible{outline:2px solid #990f05;outline-offset:3px;}");
+    }
+
     css.push("@media screen and (max-width:" + bp + "px){" + m.join("") + "}");
     return css.join("\n");
   }
@@ -738,8 +766,9 @@
       out.push('  <div class="rg-swipe" aria-hidden="true">Swipe to compare \u2192</div>');
       out.push('  <div class="rg-scroll">');
     }
+    var moreOnMobile = cfg.mobileLayout === "cards" && cfg.maxRowsMobile > 0;
     var tableClass = "rg-table" + (cfg.zebra ? " zebra" : "");
-    var tableIdAttr = cfg.sortable ? ' id="' + tableId + '"' : "";
+    var tableIdAttr = (cfg.sortable || moreOnMobile) ? ' id="' + tableId + '"' : "";
     var accName = cfg.tableDesc || cfg.hed || "Comparison table";
     out.push('  <table' + tableIdAttr + ' class="' + tableClass + '" aria-label="' + escAttr(accName) + '">');
 
@@ -770,7 +799,9 @@
     var hideFrom = cfg.hideRowsMobile > 0 ? Math.max(0, body.length - cfg.hideRowsMobile) : body.length;
     body.forEach(function(r, rIdx){
       var hi = cfg.highlightRows[rIdx + 1] ? " highlight" : "";
-      var hm = (rIdx >= hideFrom) ? " hide-mobile" : "";
+      // permanent hide (last N) wins; otherwise rows beyond the mobile max are collapsible
+      var hm = (rIdx >= hideFrom) ? " hide-mobile"
+             : (moreOnMobile && rIdx >= cfg.maxRowsMobile) ? " rg-more-mobile" : "";
       out.push('      <tr class="' + (hi + hm).trim() + '">');
       header.forEach(function(h, cIdx){
         var val = (r[cIdx] !== undefined) ? r[cIdx] : "";
@@ -782,6 +813,13 @@
     out.push('    </tbody>');
     out.push('  </table>');
     if(scroll) out.push('  </div>');
+
+    // "Show all" button (only emitted when there are collapsed rows to reveal)
+    if(moreOnMobile && body.length > cfg.maxRowsMobile){
+      out.push('  <div class="rg-table-more-wrap">');
+      out.push('    <button type="button" class="rg-table-more-button" aria-expanded="false" aria-controls="' + tableId + '" data-more="' + escAttr(cfg.moreButtonText) + '" data-less="' + escAttr(cfg.moreLessText) + '">' + escAttr(cfg.moreButtonText) + '</button>');
+      out.push('  </div>');
+    }
 
     if(cfg.showSource && (cfg.sourceText || cfg.sourceLabel)){
       out.push('  <div class="rg-source">');
@@ -852,6 +890,31 @@
     return s.join("\n");
   }
 
+  function buildMoreScript(cfg, tableId){
+    if(!(cfg.mobileLayout === "cards" && cfg.maxRowsMobile > 0)) return "";
+    var s = [];
+    s.push('<script>');
+    s.push('(function(){');
+    s.push('  var t=document.getElementById("' + tableId + '");');
+    s.push('  if(!t)return;');
+    s.push('  var box=t.closest?t.closest(".rg-container"):null;if(!box)return;');
+    s.push('  var btn=box.querySelector(".rg-table-more-button");if(!btn)return;');
+    s.push('  var rows=[].slice.call(t.querySelectorAll("tr.rg-more-mobile"));');
+    s.push('  if(!rows.length){var w=box.querySelector(".rg-table-more-wrap");if(w)w.style.display="none";return;}');
+    s.push('  var moreT=btn.getAttribute("data-more")||"Show all";');
+    s.push('  var lessT=btn.getAttribute("data-less")||"Show less";');
+    s.push('  btn.addEventListener("click",function(){');
+    s.push('    var expanded=btn.getAttribute("aria-expanded")!=="true";');
+    s.push('    rows.forEach(function(r){r.classList.toggle("rg-more-mobile",!expanded);});');
+    s.push('    btn.setAttribute("aria-expanded",String(expanded));');
+    s.push('    btn.textContent=expanded?lessT:moreT;');
+    s.push('    if(!expanded)btn.scrollIntoView({block:"nearest"});');
+    s.push('  });');
+    s.push('})();');
+    s.push('<\/script>');
+    return s.join("\n");
+  }
+
   function generate(){
     var cfg = readConfig();
     var rows = parseDelimited($("data").value, $("delim").value);
@@ -872,7 +935,8 @@
     var css = buildCSS(cfg, wrapClass);
     var markup = buildMarkup(cfg, rows, wrapClass, tableId);
     var script = buildScript(cfg, tableId);
-    var full = "<style>\n" + css + "\n</style>\n" + markup + (script ? "\n" + script : "");
+    var moreScript = buildMoreScript(cfg, tableId);
+    var full = "<style>\n" + css + "\n</style>\n" + markup + (script ? "\n" + script : "") + (moreScript ? "\n" + moreScript : "");
 
     $("parseInfo").textContent = rows.length + " row" + (rows.length===1?"":"s") + " (" + (rows.length-1) + " data + 1 header), " + rows[0].length + " columns.";
     $("code").textContent = full;
